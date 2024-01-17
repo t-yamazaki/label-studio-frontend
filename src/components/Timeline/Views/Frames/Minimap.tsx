@@ -1,9 +1,34 @@
 import { FC, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import groupby from 'lodash.groupby';
 import { Block, Elem } from '../../../../utils/bem';
 import { isDefined } from '../../../../utils/utilities';
-import { visualizeLifespans } from './Utils';
+import { Lifespan, visualizeLifespans } from './Utils';
 import './Minimap.styl';
 import { TimelineContext } from '../../Context';
+import { TimelineRegion } from '../../Types';
+
+/**
+ * label毎にLifespanをまとめる
+ */
+const _groupByLabel = (regions: TimelineRegion[], step: number) => {
+  const grouped = groupby(regions, 'label');
+
+  return Object.entries(grouped).map(([key, reg]) => {
+    const { color, lifespans } = reg.reduce((acc, { color, sequence }) => {
+      if (!acc.color) {
+        acc.color = color;
+      }
+      acc.lifespans.push(...visualizeLifespans(sequence, step));
+      return acc;
+    }, { color: '', lifespans: [] } as { color: string, lifespans: Lifespan[] });
+
+    return {
+      id: key,
+      color,
+      lifespans,
+    };
+  });
+};
 
 export const Minimap: FC<any> = () => {
   const { regions, length } = useContext(TimelineContext);
@@ -11,13 +36,16 @@ export const Minimap: FC<any> = () => {
   const [step, setStep] = useState(0);
 
   const visualization = useMemo(() => {
-    return regions.map(({ id, color, sequence }) => {
-      return {
-        id,
-        color,
-        lifespans: visualizeLifespans(sequence, step),
-      };
-    });
+    // group Lifespans by label
+    return _groupByLabel(regions, step);
+
+    // return regions.map(({ id, color, sequence }) => {
+    //   return {
+    //     id,
+    //     color,
+    //     lifespans: visualizeLifespans(sequence, step),
+    //   };
+    // });
   }, [step, regions]);
 
   useEffect(() => {
@@ -28,7 +56,7 @@ export const Minimap: FC<any> = () => {
 
   return (
     <Block ref={root} name="minimap">
-      {visualization.slice(0, 5).map(({ id, color, lifespans }) => {
+      {visualization.map(({ id, color, lifespans }) => {
         return (
           <Elem key={id} name="region" style={{ '--color': color }}>
             {lifespans.map((connection, i) => {
